@@ -1,0 +1,64 @@
+:root {
+  --c-bg: #FAF7F2;
+  --c-bg-soft: #F3EDE4;
+  --c-sand: #E6D2B8;
+  --c-sand-soft: #F0E4D3;
+  --c-brown: #70513B;
+  --c-brown-deep: #5A3F2C;
+  --c-ink: #1D2D35;
+  --c-teal: #3F7A7A;
+  --c-teal-deep: #326262;
+  --c-teal-soft: #E2EEEE;
+  --c-gold: #C89A4B;
+  --c-gold-soft: #F4E8D2;
+  --c-danger: #B4543F;
+  --c-danger-soft: #F6E4DF;
+  --c-success: #3F7A5A;
+
+  --c-surface: #FFFFFF;
+  --c-surface-2: #FCFAF6;
+  --c-line: rgba(29, 45, 53, 0.09);
+  --c-line-strong: rgba(29, 45, 53, 0.16);
+  --c-muted: rgba(29, 45, 53, 0.62);
+  --c-faint: rgba(29, 45, 53, 0.42);
+
+  --grid-line: rgba(63, 122, 122, 0.07);
+
+  --font-ar: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  --font-en: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-math: "STIX Two Text", "Times New Roman", serif;
+  --font-katex: "KaTeX_Main", "STIX Two Text", serif;
+
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 30px;
+  --r-full: 999px;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 44px;
+  --sp-8: 60px;
+
+  --sh-1: 0 1px 2px rgba(29, 45, 53, 0.05);
+  --sh-2: 0 4px 14px rgba(29, 45, 53, 0.06);
+  --sh-3: 0 10px 34px rgba(29, 45, 53, 0.09);
+  --sh-pop: 0 18px 50px rgba(29, 45, 53, 0.16);
+
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-line: rgba(255, 255, 255, 0.55);
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-1: 140ms;
+  --dur-2: 260ms;
+  --dur-3: 480ms;
+
+  --topbar-h: 64px;
+  --bottomnav-h: 66px;
+  --content-w: 1120px;
+}
