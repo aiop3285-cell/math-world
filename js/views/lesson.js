@@ -652,7 +652,9 @@
     var btn = root.querySelector("[data-complete]");
     if (!btn) return;
     btn.addEventListener("click", function () {
-      MW.store.completeLesson(S.lesson.id);
+      btn.disabled = true;
+      Promise.resolve(MW.store.completeLesson(S.lesson.id)).then(function (completed) {
+        if (!completed) { btn.disabled = false; return; }
       MW.store.clearLessonPos(S.lesson.id);
       var p = MW.store.getProgress();
       var granted = p.newBadges || [];
@@ -722,6 +724,7 @@
         if (rf) rf.style.strokeDashoffset = String(circ * (1 - mastery / 100));
         if (mv) animateCount(mv, mastery, "%");
       }, 80);
+    });
     });
   }
 
