@@ -73,22 +73,34 @@
     renderPills();
   }
 
+  function serverCall(fn, args) {
+    if (!MW.auth.isLive() || !MW.auth.rpc) return Promise.resolve(null);
+    return MW.auth.rpc(fn, args || {}).then(function (res) {
+      if (!res || res.error) return null;
+      return res.data || null;
+    });
+  }
+
+  var snapshotTimer = null;
   function persist(p) {
     var u = currentUser();
     if (!u) return;
     var clean = {};
     Object.keys(p).forEach(function (k) { if (k !== "_progCache") clean[k] = p[k]; });
     localStorage.setItem(progressKey(u.id), JSON.stringify(clean));
-    syncPointsRemote(clean.points);
+    if (MW.auth.isLive() && MW.auth.rpc) {
+      clearTimeout(snapshotTimer);
+      snapshotTimer = setTimeout(function () {
+        MW.auth.rpc("save_progress_snapshot", { p_progress: clean });
+      }, 250);
+    }
   }
 
-  var lastSync = 0;
-  function syncPointsRemote(points) {
-    if (!MW.auth.isLive()) return;
-    var now = Date.now();
-    if (now - lastSync < 15000) return;
-    lastSync = now;
-    MW.auth.updateOwnProfile({ points: points });
+  function applyServerPoints(p, data) {
+    if (!data || typeof data.total_points !== "number") return;
+    p.points = data.total_points;
+    persistSilent(p);
+    renderPills();
   }
 
   function touchStreak(p) {
@@ -108,6 +120,7 @@
   }
 
   function addPoints(amount, reason) {
+    if (MW.auth.isLive()) return false;
     var p = getProgress();
     p.points += amount;
     p.weekXp += amount;
@@ -118,39 +131,70 @@
 
   function completeLesson(lessonId) {
     var p = getProgress();
-    if (p.completedLessons.indexOf(lessonId) !== -1) return false;
+    if (p.completedLessons.indexOf(lessonId) !== -1) return Promise.resolve(false);
+    var live = MW.auth.isLive();
     p.completedLessons.push(lessonId);
-    p.points += 15;
-    p.weekXp += 15;
+    if (!live) { p.points += 15; p.weekXp += 15; }
     checkBadges(p);
     saveProgress(p);
-    return true;
+    if (!live) return Promise.resolve(true);
+    return serverCall("claim_activity", {
+      p_activity_key: "lesson:" + lessonId,
+      p_activity_type: "lesson"
+    }).then(function (data) {
+      if (!data) {
+        p.completedLessons = p.completedLessons.filter(function (id) { return id !== lessonId; });
+        saveProgress(p);
+        return false;
+      }
+      applyServerPoints(p, data);
+      return true;
+    });
   }
 
   function recordQuiz(unitId, scorePct) {
     var p = getProgress();
+    var live = MW.auth.isLive();
     p.quizScores[unitId] = Math.max(scorePct, p.quizScores[unitId] || 0);
     p.quizHistory.push({ id: unitId, pct: scorePct, ts: Date.now() });
     if (p.quizHistory.length > 30) p.quizHistory.shift();
     if (scorePct >= 60 && p.passedQuizzes.indexOf(unitId) === -1) {
       p.passedQuizzes.push(unitId);
-      p.points += 30;
-      p.weekXp += 30;
+      if (!live) { p.points += 30; p.weekXp += 30; }
     }
-    if (scorePct === 100) { p.perfectQuiz = true; p.points += 10; p.weekXp += 10; }
+    if (scorePct === 100) {
+      p.perfectQuiz = true;
+      if (!live) { p.points += 10; p.weekXp += 10; }
+    }
     checkBadges(p);
     saveProgress(p);
+    if (live) {
+      serverCall("claim_activity", {
+        p_activity_key: "quiz:" + unitId,
+        p_activity_type: "quiz",
+        p_score_pct: scorePct
+      }).then(function (data) { applyServerPoints(p, data); });
+    }
   }
 
   function recordPractice(correctCount) {
     var p = getProgress();
+    var live = MW.auth.isLive();
     var pts = Math.min(20, correctCount * 2);
-    if (pts > 0) { p.points += pts; p.weekXp += pts; }
+    if (pts > 0 && !live) { p.points += pts; p.weekXp += pts; }
     saveProgress(p);
+    if (live) {
+      serverCall("claim_activity", {
+        p_activity_key: "practice:" + Date.now() + "_" + Math.floor(Math.random() * 1000000000),
+        p_activity_type: "practice",
+        p_correct_count: correctCount
+      }).then(function (data) { applyServerPoints(p, data); });
+    }
   }
 
   function saveFinal(courseId, pct) {
     var p = getProgress();
+    var live = MW.auth.isLive();
     p.quizHistory.push({ id: "final:" + courseId, pct: pct, ts: Date.now() });
     var prev = p.certificates[courseId];
     var course = MW.curriculum.getCourse(courseId);
@@ -159,7 +203,7 @@
     if (course) {
       MW.curriculum.courseParts(course).forEach(function (grp) {
         grp.parts.forEach(function (pr) {
-          (pr.unit.lessons || []).forEach(function (l) { lessons++; });
+          (pr.unit.lessons || []).forEach(function () { lessons++; });
           if (p.quizScores[pr.unit.id] !== undefined) quizPcts.push(p.quizScores[pr.unit.id]);
         });
       });
@@ -171,10 +215,30 @@
       lessons: lessons,
       quizAvg: quizAvg
     };
-    p.points += 50;
-    p.weekXp += 50;
+    if (!live) { p.points += 50; p.weekXp += 50; }
     checkBadges(p);
     saveProgress(p);
+    if (live) {
+      serverCall("claim_activity", {
+        p_activity_key: "final:" + courseId,
+        p_activity_type: "final",
+        p_score_pct: pct
+      }).then(function (data) { applyServerPoints(p, data); });
+    }
+  }
+
+  function hydrate() {
+    if (!MW.auth.isLive()) return Promise.resolve();
+    return serverCall("get_my_progress", {}).then(function (data) {
+      if (!data) return;
+      var p = getProgress();
+      if (typeof data.points === "number") p.points = data.points;
+      if (Array.isArray(data.completed_lessons)) p.completedLessons = data.completed_lessons;
+      if (Array.isArray(data.passed_quizzes)) p.passedQuizzes = data.passed_quizzes;
+      if (data.quiz_scores && typeof data.quiz_scores === "object") p.quizScores = data.quiz_scores;
+      persistSilent(p);
+      renderPills();
+    });
   }
 
   function getCertificate(courseId) {
@@ -206,11 +270,18 @@
     var p = getProgress();
     p.challengeDay = todayKey();
     if (correct) {
-      p.points += 20; p.weekXp += 20;
+      if (!MW.auth.isLive()) { p.points += 20; p.weekXp += 20; }
       p.challengesSolved = (p.challengesSolved || 0) + 1;
     }
     checkBadges(p);
     saveProgress(p);
+    if (MW.auth.isLive()) {
+      serverCall("claim_activity", {
+        p_activity_key: "challenge:" + todayKey(),
+        p_activity_type: "challenge",
+        p_score_pct: correct ? 100 : 0
+      }).then(function (data) { applyServerPoints(p, data); });
+    }
   }
 
   function checkBadges(p) {
@@ -399,6 +470,7 @@
     },
     logout: logout,
     session: session,
+    hydrate: hydrate,
     getProgress: getProgress,
     addPoints: addPoints,
     completeLesson: completeLesson,
