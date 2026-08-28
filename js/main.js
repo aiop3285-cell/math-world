@@ -131,6 +131,8 @@
       route();
     });
     MW.auth.init().then(function () {
+      return MW.store.hydrate();
+    }).then(function () {
       route();
     });
   }
