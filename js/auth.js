@@ -169,7 +169,7 @@
   function updateOwnProfile(patch) {
     if (!client || !state.user) return Promise.resolve(null);
     var allowed = {};
-    ["name", "phone", "points", "notify_tracks"].forEach(function (k) {
+    ["name", "phone", "notify_tracks"].forEach(function (k) {
       if (patch[k] !== undefined) allowed[k] = patch[k];
     });
     return client.from("profiles").update(allowed).eq("id", state.user.id)
@@ -183,7 +183,7 @@
 
   function topStudents(limit) {
     if (!client) return Promise.resolve([]);
-    return client.from("profiles")
+    return client.from("leaderboard_view")
       .select("id,name,points")
       .order("points", { ascending: false })
       .limit(limit || 10)
@@ -201,6 +201,11 @@
       .catch(function () { return []; });
   }
 
+  function rpc(fn, args) {
+    if (!client || !state.user) return Promise.resolve({ data: null, error: { message: "not_authenticated" } });
+    return client.rpc(fn, args || {});
+  }
+
   function updatePassword(newPass) {
     if (!client || !state.user) return Promise.resolve({ ok: false, error: "err_network" });
     return client.auth.updateUser({ password: newPass })
@@ -215,6 +220,7 @@
     init: init,
     state: state,
     isLive: function () { return state.mode === "supabase" && !!client; },
+    rpc: rpc,
     user: function () { return state.user; },
     profile: function () { return state.profile; },
     signUpEmail: signUpEmail,
